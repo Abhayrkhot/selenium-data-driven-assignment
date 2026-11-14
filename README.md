@@ -2,7 +2,7 @@
 
 A Java Maven scaffold for a five-scenario Selenium assignment. Uses Selenium WebDriver, TestNG, and Apache POI. Test data is stored in Excel.
 
-**Current status: phase 2.** The Maven build and Excel workbook are implemented and validated. Browser automation, the local demo website, step screenshots, and the custom HTML scenario report are still planned. A successful build at this stage means the workbook checks passed; it does not mean the five assignment scenarios ran.
+**Current status: phase 3.** The Maven build, Excel workbook, and reusable browser framework are implemented and validated. The local demo website, complete five-scenario execution, and custom HTML scenario report are still planned. A successful build at this stage means the workbook and framework smoke checks passed; it does not mean the five assignment scenarios ran.
 
 No target website or detailed scenario specifications have been provided. The included workbook contains illustrative local-demo definitions and clearly marked locators to customize.
 
@@ -21,7 +21,7 @@ From the repository root:
 mvn --batch-mode --no-transfer-progress clean test
 ```
 
-This runs four infrastructure checks: valid workbook loading, missing input references, duplicate scenario IDs, and duplicate step orders. The mutation checks work in memory and do not overwrite the workbook. Standard TestNG/Maven results are written under `target/surefire-reports/`. These are not the custom assignment report.
+This runs four workbook checks and three Chrome framework smoke checks. The mutation checks work in memory and do not overwrite the workbook. Smoke screenshots are created under a temporary `target/phase3-smoke-*` folder. Standard TestNG/Maven results are written under `target/surefire-reports/`. These are not the custom assignment report.
 
 To validate a separate local workbook:
 
@@ -29,7 +29,7 @@ To validate a separate local workbook:
 mvn test -Dworkbook=/absolute/path/to/scenarios.local.xlsx
 ```
 
-No Python, JavaScript, browser, or driver installation is required to run phase 2. Chrome and browser setup will be introduced with the automation framework. If Maven rejects Java 8, point `JAVA_HOME` to your installed JDK 17+ and reopen your terminal as needed.
+Google Chrome is required for phase 3. Selenium Manager resolves the matching driver automatically and may need internet access on its first run. No Python or Node.js installation is required. If Maven rejects Java 8, point `JAVA_HOME` to your installed JDK 17+ and reopen your terminal as needed.
 
 ## Planned scenario order
 
@@ -53,9 +53,9 @@ Edit `data/scenarios.xlsx` in Excel or another compatible spreadsheet editor. Cl
 
 Amber cells are editable data. Headers are frozen and action/outcome dropdowns reduce editing mistakes. Numeric orders and timeouts are Excel numbers. No formulas are needed or accepted. Empty input/expected/locator references are permitted only when the action does not need them.
 
-The `${demoBaseUrl}` text is a placeholder for a local server address that phase 3 will resolve. It is not a functioning website yet. For a real target, replace these URLs, locators, inputs, and scenario steps with the actual assignment definitions. Additional action types may require implementing corresponding Java behavior.
+The `${demoBaseUrl}` text is a placeholder for a local server address that phase 4 will supply. It is not a functioning website yet. The framework now resolves named placeholders and rejects any it cannot resolve. For a real target, replace these URLs, locators, inputs, and scenario steps with the actual assignment definitions. Additional action types may require corresponding Java behavior.
 
-The action contract is documented in [data/README.md](data/README.md). Java currently reads and validates this contract; it does not execute the actions yet. Build dependencies and workbook file paths are infrastructure settings in Maven. Test inputs and login values must not be added to Java, XML configuration, or environment files. No login values are needed for the illustrative catalog; add any real login data only to an untracked `data/*.local.xlsx` copy.
+The action contract is documented in [data/README.md](data/README.md). Java reads, validates, and can execute this contract. Build dependencies, output paths, browser mode, and workbook file paths are infrastructure settings rather than test data. Test inputs and login values must not be added to Java, XML configuration, or environment files. No login values are needed for the illustrative catalog; add any real login data only to an untracked `data/*.local.xlsx` copy.
 
 ## Structure and remaining phases
 
@@ -63,12 +63,15 @@ The action contract is documented in [data/README.md](data/README.md). Java curr
 - `testng.xml`: sequential phase 2 validation suite.
 - `src/test/java/assignment/data/WorkbookData.java`: read-only Excel loader with schema/reference validation.
 - `src/test/java/assignment/data/WorkbookValidationTest.java`: checks that the workbook is usable and invalid references/orders are rejected.
+- `src/test/java/assignment/browser/`: isolated Chrome and run-directory lifecycle.
+- `src/test/java/assignment/steps/`: Excel action execution, waits, assertions, soft verification, screenshots, and smoke checks.
 - `PHASE_1.md`: scope and acceptance criteria.
+- `PHASE_3.md`: browser-framework behavior, verification, and phase boundary.
 
-Phase 3 adds browser management, waits, action execution, hard assertions, soft verification, and before/after step screenshots. Phase 4 wires all five scenarios and generates the HTML report with Scenario Name / Actual / Expected / Pass-Fail. Phase 5 verifies the complete demo and documents target customization.
+Phase 4 wires all five scenarios and generates the HTML report with Scenario Name / Actual / Expected / Pass-Fail. Phase 5 verifies the complete demo and documents target customization.
 
 ## Verification
 
-On November 14, 2026, the phase 2 Maven checks passed: **4 tests, 0 failures, 0 errors, 0 skipped**, using Maven 3.9.16 and JDK 26.0.2 with Java 17 compilation output. All five workbook sheets were rendered and visually reviewed. The workbook contains five scenarios and 18 steps. Browser scenarios have not run, and the Java 17 runtime itself has not been tested on this machine.
+On November 14, 2026, the phase 3 Maven checks passed: **7 tests, 0 failures, 0 errors, 0 skipped**, using Maven 3.9.16 and JDK 26.0.2 with Java 17 compilation output. The Chrome smoke path executed five Excel-defined steps and created ten before/after screenshots; hard- and soft-failure screenshot paths also passed. The workbook contains five scenarios and 18 steps. The complete browser scenarios have not run, and the Java 17 runtime itself has not been tested on this machine.
 
 Official references: [Selenium](https://www.selenium.dev/documentation/webdriver/), [TestNG](https://testng.org/), [Apache POI](https://poi.apache.org/components/spreadsheet/), and [Maven Surefire](https://maven.apache.org/surefire/maven-surefire-plugin/).

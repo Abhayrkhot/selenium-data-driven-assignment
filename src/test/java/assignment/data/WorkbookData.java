@@ -82,6 +82,35 @@ public final class WorkbookData {
             .sorted(Comparator.comparingInt(row -> positiveInt(row, "execution_order"))).toList();
     }
 
+    public Map<String, String> dataValues() {
+        return keyedValues("Data", "key", "value");
+    }
+
+    public Map<String, LocatorDefinition> locators() {
+        var result = new LinkedHashMap<String, LocatorDefinition>();
+        for (var row : rows("Locators")) {
+            result.put(row.get("key"), new LocatorDefinition(row.get("strategy"), row.get("selector")));
+        }
+        return Map.copyOf(result);
+    }
+
+    public List<StepDefinition> stepsFor(String scenarioId) {
+        return rows("Steps").stream()
+            .filter(row -> scenarioId.equals(row.get("scenario_id")))
+            .sorted(Comparator.comparingInt(row -> positiveInt(row, "step_order")))
+            .map(row -> new StepDefinition(
+                row.get("scenario_id"), positiveInt(row, "step_order"), row.get("action"),
+                row.get("locator_key"), row.get("input_key"), row.get("expected_key"),
+                positiveInt(row, "timeout_seconds")))
+            .toList();
+    }
+
+    private Map<String, String> keyedValues(String sheet, String keyColumn, String valueColumn) {
+        var result = new LinkedHashMap<String, String>();
+        for (var row : rows(sheet)) result.put(row.get(keyColumn), row.get(valueColumn));
+        return Map.copyOf(result);
+    }
+
     private void validate() {
         Set<String> scenarios = uniqueKeys("Scenarios", "scenario_id");
         Set<String> data = uniqueKeys("Data", "key");
