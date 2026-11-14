@@ -7,6 +7,6 @@ if [ ! -f "${workbook_path}" ]; then
   exit 2
 fi
 
-# S01 performs the one permitted Duo pause; S02 and S05 then reuse the authenticated session.
+# S01 waits for Duo's authenticated redirect; S02 and S05 reuse the session.
 mvn --batch-mode --no-transfer-progress clean test -Dheadless=false \
   -Dworkbook="${workbook_path}" -DscenarioIds=S01,S02,S05

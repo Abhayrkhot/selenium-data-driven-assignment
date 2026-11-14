@@ -2,9 +2,8 @@ package assignment.steps;
 
 import assignment.data.LocatorDefinition;
 import assignment.data.StepDefinition;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -124,7 +123,7 @@ public final class StepExecutor {
                 yield "Switched to default content";
             }
             case "SWITCH_TO_NEW_WINDOW" -> switchToNewWindow(step);
-            case "WAIT_FOR_ENTER" -> waitForEnter();
+            case "WAIT_FOR_AUTHENTICATION" -> waitForAuthentication(step);
             case "PRINT_TO_PDF" -> printToPdf(step);
             case "ASSERT_VISIBLE" -> {
                 WebElement element = visible(step);
@@ -168,17 +167,14 @@ public final class StepExecutor {
             }).orElseThrow(() -> new IllegalStateException("No new browser window appeared"));
     }
 
-    private String waitForEnter() {
-        if (Boolean.parseBoolean(System.getProperty("skipManualEnter", "false"))) {
-            return "Manual Enter skipped by explicit test setting";
-        }
-        System.out.println("Complete Duo approval, then press Enter once to continue the full suite.");
-        try {
-            new BufferedReader(new InputStreamReader(System.in)).readLine();
-            return "Duo continuation confirmed";
-        } catch (IOException error) {
-            throw new IllegalStateException("Could not read the permitted Enter key", error);
-        }
+    private String waitForAuthentication(StepDefinition step) {
+        String authenticatedUrl = resolve(value("student_hub_url"));
+        String expectedHost = URI.create(authenticatedUrl).getHost();
+        // Duo remains the only manual interaction. The redirect is a more reliable signal than
+        // forwarding terminal input through Maven and works during a live presentation.
+        wait(step).until(ignored -> expectedHost.equalsIgnoreCase(
+            URI.create(driver.getCurrentUrl()).getHost()));
+        return "Authenticated at " + driver.getCurrentUrl();
     }
 
     private String printToPdf(StepDefinition step) {

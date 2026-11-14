@@ -149,7 +149,7 @@ public final class WorkbookData {
                 }
                 case "ASSERT_URL_CONTAINS" -> required(row, "expected_key");
                 case "PRINT_TO_PDF" -> required(row, "input_key");
-                case "WAIT_FOR_ENTER", "SWITCH_TO_NEW_WINDOW", "SWITCH_TO_DEFAULT_CONTENT" -> { }
+                case "WAIT_FOR_AUTHENTICATION", "SWITCH_TO_NEW_WINDOW", "SWITCH_TO_DEFAULT_CONTENT" -> { }
                 default -> throw new IllegalArgumentException("Unsupported action: " + row.get("action"));
             }
         }
