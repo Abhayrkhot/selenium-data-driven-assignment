@@ -12,9 +12,12 @@ import assignment.steps.StepEvidence;
 import assignment.steps.StepExecutor;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
@@ -45,9 +48,22 @@ public class AssignmentScenarioTest {
     public Object[][] scenarios() throws Exception {
         if (workbook == null) workbook = WorkbookData.load(Path.of(System.getProperty("workbook")));
         List<Map<String, String>> scenarios = workbook.scenarios();
+        Set<String> selected = selectedScenarioIds();
+        if (!selected.isEmpty()) {
+            // Calibration runs can exercise only authenticated pages while preserving workbook order.
+            scenarios = scenarios.stream().filter(row -> selected.contains(row.get("scenario_id"))).toList();
+            if (scenarios.isEmpty()) throw new IllegalArgumentException("scenarioIds did not match any workbook scenario");
+        }
         Object[][] values = new Object[scenarios.size()][1];
         for (int index = 0; index < scenarios.size(); index++) values[index][0] = scenarios.get(index);
         return values;
+    }
+
+    private static Set<String> selectedScenarioIds() {
+        String configured = System.getProperty("scenarioIds", "").trim();
+        if (configured.isEmpty()) return Set.of();
+        return Arrays.stream(configured.split(",")).map(String::trim).filter(value -> !value.isEmpty())
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     @Test(dataProvider = "scenarios")

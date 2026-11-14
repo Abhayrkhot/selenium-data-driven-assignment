@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+/** Suite-level result store shared by TestNG invocations and the report listener. */
 public final class ScenarioReportStore {
     private static final List<ScenarioReportEntry> ENTRIES = new ArrayList<>();
     private static Path root;

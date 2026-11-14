@@ -58,6 +58,14 @@ Selenium's print API saves the transcript PDF reliably after the required right-
 
 ## Calibrate before presentation
 
-Run once with the presenter's account and update only authenticated selectors in the Locators sheet if Northeastern's current UI differs. Verify MyNEU login, the Student Hub navigation, Banner transcript controls, all Canvas event fields, and Student Hub's Academic Calendar links. Also recheck the Trumba frame if the registrar changes its embed.
+Run the authenticated calibration subset with the presenter's account:
+
+```sh
+./scripts/run-calibration.sh
+```
+
+This runs S01, S02, and S05 in workbook order. S01 performs the one permitted Duo pause; Canvas and the later Student Hub visit reuse that session. Update only authenticated selectors in the Locators sheet if Northeastern's current UI differs. Verify MyNEU login, Student Hub navigation, Banner transcript controls, all Canvas event fields, and Student Hub's Academic Calendar links. Also recheck the Trumba frame if the registrar changes its embed.
+
+The Canvas date choices intentionally use the Excel values `event1_date_label` and `event2_date_label`. During calibration, confirm that the current React date picker exposes those dates through an accessible label. If it exposes a different format, copy the exact label from the browser into the two Data cells rather than hard-coding a date in Java.
 
 Do not submit the LibCal reservation. The assignment asks only to verify the selected slot.

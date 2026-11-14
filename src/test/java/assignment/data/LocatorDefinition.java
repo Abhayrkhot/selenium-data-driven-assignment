@@ -2,6 +2,7 @@ package assignment.data;
 
 import org.openqa.selenium.By;
 
+/** Excel-defined selector converted to Selenium's locator representation at runtime. */
 public record LocatorDefinition(String strategy, String selector) {
     public By toBy() {
         return toBy(selector);
