@@ -19,6 +19,6 @@ Action names encode hard versus soft assertion behavior; a separate assertion-mo
 
 The current Java loader validates required sheets and headers, required fields, unique keys/orders, positive integer timeouts, action names, selector strategies, boolean download permissions, and all step references. Every scenario must have steps. Malformed data raises an explanatory exception before any future browser startup.
 
-This validation does not establish that a URL works, that a selector matches a page, or that the intended outcomes actually occur. Phase 3 smoke checks establish the framework mechanics using a temporary local fixture. The phase 4 demo server and full scenario runner will establish the illustrative scenario behavior. The local demo is intentionally separate from any real assignment website.
+This validation alone does not establish that a URL works, that a selector matches a page, or that the intended outcomes actually occur. Phase 3 smoke checks establish the framework mechanics using a temporary local fixture. Phase 4 executes the illustrative workbook against a local demo server. The local demo is intentionally separate from any real assignment website.
 
 The `intended_outcome` column is documentation only. Never use it to suppress a failing assertion or label an unexecuted scenario as passed.
