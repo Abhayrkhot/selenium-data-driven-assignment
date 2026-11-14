@@ -29,7 +29,7 @@ The desired demo result is **PASS, PASS, PASS, FAIL, PASS**. This is a design ta
 ## Planned Excel workbook
 
 - **Scenarios:** stable ID, execution order, scenario name, description, intended demo outcome.
-- **Steps:** scenario ID, step order, action, locator key, input key, expected-value key, hard/soft assertion mode.
+- **Steps:** scenario ID, step order, action, locator key, input key, expected-value key, timeout in seconds. Action names distinguish hard assertions from soft verification.
 - **Data:** named URLs, search terms, dataset names, expected text, download filenames, and any login information. Demo URLs will use a documented local-server placeholder resolved at runtime.
 - **Locators:** named selector strategies and selectors, clearly labeled as local-demo selectors to replace for the real website.
 - **DemoData:** local-demo catalog records and download availability. The demo's displayed business values also come from the workbook, preventing duplicate test data in Java or HTML.
@@ -79,4 +79,4 @@ For case 4, Expected describes the successful download assertion, Actual describ
 
 ## Phase status
 
-Phase 1 is complete: scope, execution order, workbook design, reporting behavior, and acceptance checks are defined. No browser tests have been implemented or run. Phase 2 will create the Maven project and Excel workbook.
+Phase 1 is complete: scope, execution order, workbook design, reporting behavior, and acceptance checks are defined. Phase 2 has added the Maven project, Excel workbook, and workbook validation tests. No browser tests have been implemented or run. See README.md for current implementation and verification status.

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Phase 2 workbook validation" parallel="none" thread-count="1">
+  <test name="Workbook structure and references" preserve-order="true">
+    <classes>
+      <class name="assignment.data.WorkbookValidationTest"/>
+    </classes>
+  </test>
+</suite>
