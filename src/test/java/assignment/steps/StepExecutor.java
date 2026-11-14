@@ -2,17 +2,27 @@ package assignment.steps;
 
 import assignment.data.LocatorDefinition;
 import assignment.data.StepDefinition;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.PrintsPage;
+import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.print.PrintOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.Assert;
 import org.testng.asserts.SoftAssert;
@@ -82,6 +92,50 @@ public final class StepExecutor {
                 clickable(step).click();
                 yield "Clicked " + step.locatorKey();
             }
+            case "SELECT_TEXT" -> {
+                String option = resolve(value(step.inputKey()));
+                new Select(visible(step)).selectByVisibleText(option);
+                yield option;
+            }
+            case "SCROLL_INTO_VIEW" -> {
+                WebElement element = visible(step);
+                ((JavascriptExecutor) driver).executeScript(
+                    "arguments[0].scrollIntoView({block:'center', inline:'nearest'});", element);
+                yield "Scrolled to " + step.locatorKey();
+            }
+            case "CONTEXT_CLICK" -> {
+                WebElement element = visible(step);
+                new Actions(driver).contextClick(element).perform();
+                yield "Right-clicked " + step.locatorKey();
+            }
+            case "SET_CHECKBOX" -> {
+                WebElement checkbox = visible(step);
+                boolean desired = Boolean.parseBoolean(resolve(value(step.inputKey())));
+                if (checkbox.isSelected() != desired) checkbox.click();
+                Assert.assertEquals(checkbox.isSelected(), desired, "Checkbox state mismatch");
+                yield Boolean.toString(checkbox.isSelected());
+            }
+            case "SWITCH_TO_IFRAME" -> {
+                wait(step).until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(by(step.locatorKey())));
+                yield "Switched to " + step.locatorKey();
+            }
+            case "SWITCH_TO_DEFAULT_CONTENT" -> {
+                driver.switchTo().defaultContent();
+                yield "Switched to default content";
+            }
+            case "SWITCH_TO_NEW_WINDOW" -> switchToNewWindow(step);
+            case "WAIT_FOR_ENTER" -> waitForEnter();
+            case "PRINT_TO_PDF" -> printToPdf(step);
+            case "ASSERT_VISIBLE" -> {
+                WebElement element = visible(step);
+                Assert.assertTrue(element.isDisplayed(), "Element is not visible: " + step.locatorKey());
+                yield element.getText().isBlank() ? "Visible: " + step.locatorKey() : element.getText();
+            }
+            case "VERIFY_VISIBLE" -> {
+                boolean displayed = visible(step).isDisplayed();
+                softAssert.assertTrue(displayed, "Element is not visible: " + step.locatorKey());
+                yield Boolean.toString(displayed);
+            }
             case "ASSERT_TEXT" -> {
                 String text = visible(step).getText();
                 Assert.assertEquals(text, resolve(expected), "Visible text mismatch");
@@ -92,9 +146,59 @@ public final class StepExecutor {
                 softAssert.assertEquals(text, resolve(expected), "Visible text mismatch");
                 yield text;
             }
+            case "ASSERT_URL_CONTAINS" -> {
+                String current = driver.getCurrentUrl();
+                Assert.assertTrue(current.contains(resolve(expected)),
+                    "URL did not contain expected text. Actual: " + current);
+                yield current;
+            }
             case "ASSERT_DOWNLOAD" -> assertDownload(step, resolve(expected));
             default -> throw new IllegalArgumentException("Unsupported action: " + step.action());
         };
+    }
+
+    private String switchToNewWindow(StepDefinition step) {
+        String original = driver.getWindowHandle();
+        Set<String> originalOnly = Set.of(original);
+        wait(step).until(ignored -> driver.getWindowHandles().stream().anyMatch(handle -> !handle.equals(original)));
+        return driver.getWindowHandles().stream().filter(handle -> !originalOnly.contains(handle)).findFirst()
+            .map(handle -> {
+                driver.switchTo().window(handle);
+                return "Switched from " + original + " to new window";
+            }).orElseThrow(() -> new IllegalStateException("No new browser window appeared"));
+    }
+
+    private String waitForEnter() {
+        if (Boolean.parseBoolean(System.getProperty("skipManualEnter", "false"))) {
+            return "Manual Enter skipped by explicit test setting";
+        }
+        System.out.println("Complete Duo approval, then press Enter once to continue the full suite.");
+        try {
+            new BufferedReader(new InputStreamReader(System.in)).readLine();
+            return "Duo continuation confirmed";
+        } catch (IOException error) {
+            throw new IllegalStateException("Could not read the permitted Enter key", error);
+        }
+    }
+
+    private String printToPdf(StepDefinition step) {
+        // Selenium cannot drive Chrome's operating-system print dialog. Its print endpoint
+        // preserves the assignment's PDF result after the preceding right-click step.
+        if (!(driver instanceof PrintsPage printable)) {
+            throw new WebDriverException("The active browser does not support Selenium print-to-PDF");
+        }
+        String filename = resolve(value(step.inputKey()));
+        Path output = downloadDirectory.resolve(filename).normalize();
+        if (!output.startsWith(downloadDirectory.normalize())) {
+            throw new IllegalArgumentException("PDF filename must stay inside the download directory");
+        }
+        try {
+            Files.write(output, Base64.getDecoder().decode(
+                printable.print(new PrintOptions()).getContent()));
+            return output.toAbsolutePath().toString();
+        } catch (IOException error) {
+            throw new IllegalStateException("Could not save printed transcript PDF", error);
+        }
     }
 
     private String assertDownload(StepDefinition step, String expectedFilename) {
@@ -147,7 +251,7 @@ public final class StepExecutor {
     private By by(String key) {
         LocatorDefinition locator = locators.get(key);
         if (locator == null) throw new IllegalArgumentException("Unknown locator key: " + key);
-        return locator.toBy();
+        return locator.toBy(resolve(locator.selector()));
     }
 
     private String value(String key) {

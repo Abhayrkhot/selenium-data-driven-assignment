@@ -9,6 +9,14 @@ The workbook contains literal cells rather than formulas. Each sheet has its exa
 - `OPEN`: requires `input_key`, pointing to a URL in Data. Navigate to that URL.
 - `TYPE`: requires `locator_key` and `input_key`. Wait for the input, clear it, and type the workbook value.
 - `CLICK`: requires `locator_key`. Wait until clickable and click.
+- `SELECT_TEXT`: choose a native dropdown option from an Excel value.
+- `SCROLL_INTO_VIEW` and `CONTEXT_CLICK`: demonstrate scrolling and right-click.
+- `SET_CHECKBOX`: change and assert an Excel-defined checkbox state.
+- `SWITCH_TO_IFRAME`, `SWITCH_TO_DEFAULT_CONTENT`, and `SWITCH_TO_NEW_WINDOW`: handle embedded and newly opened pages.
+- `WAIT_FOR_ENTER`: pauses once after the user approves Duo.
+- `PRINT_TO_PDF`: saves the current transcript through Selenium's print API.
+- `ASSERT_VISIBLE` and `VERIFY_VISIBLE`: hard and soft visibility checks.
+- `ASSERT_URL_CONTAINS`: hard URL check.
 - `ASSERT_TEXT`: requires `locator_key` and `expected_key`. Compare visible element text to the workbook expectation with a hard assertion.
 - `VERIFY_TEXT`: requires `locator_key` and `expected_key`. Collect a text mismatch as a soft assertion, then call `assertAll()` at the end of the scenario.
 - `ASSERT_DOWNLOAD`: requires `expected_key` for the filename and `locator_key` for the observed download status. Wait for a complete, nonempty file in the scenario's fresh download directory. Include observed status text in failure evidence. A denial message is not a successful download.
@@ -17,8 +25,8 @@ Action names encode hard versus soft assertion behavior; a separate assertion-mo
 
 ## Validation boundaries
 
-The current Java loader validates required sheets and headers, required fields, unique keys/orders, positive integer timeouts, action names, selector strategies, boolean download permissions, and all step references. Every scenario must have steps. Malformed data raises an explanatory exception before any future browser startup.
+The Java loader validates required sheets and headers, required fields, unique keys/orders, positive integer timeouts, action names, selector strategies, and all step references. Every scenario must have steps. Malformed data raises an explanatory exception before browser startup.
 
-This validation alone does not establish that a URL works, that a selector matches a page, or that the intended outcomes actually occur. Phase 3 smoke checks establish the framework mechanics using a temporary local fixture. Phase 4 executes the illustrative workbook against a local demo server. The local demo is intentionally separate from any real assignment website.
+Validation alone does not establish that a URL works or that an authenticated selector matches the presenter's account. Public selectors were checked against the live pages; Student Hub, Banner, and Canvas must be calibrated during a logged-in run.
 
 The `intended_outcome` column is documentation only. Never use it to suppress a failing assertion or label an unexecuted scenario as passed.

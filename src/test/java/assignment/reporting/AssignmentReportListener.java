@@ -31,7 +31,7 @@ public final class AssignmentReportListener implements ISuiteListener {
                 <h1>Selenium assignment report</h1>
                 <p class="summary">Executed %d scenarios: %d passed and %d failed.</p>
                 <p>Scenario 4 is designed to fail. Its failure remains a failure. Scenario 5 demonstrates continuation.</p>
-                <table><thead><tr><th>Scenario Name</th><th>Actual</th><th>Expected</th><th>Pass-Fail</th><th>Evidence</th></tr></thead>
+                <table><thead><tr><th>Scenario Name</th><th>Actual</th><th>Expected</th><th>Pass-Fail</th></tr></thead>
                 <tbody>%s</tbody></table>
                 </main></body></html>
                 """.formatted(styles(), entries.size(), passed, entries.size() - passed, rows);
@@ -45,9 +45,11 @@ public final class AssignmentReportListener implements ISuiteListener {
         String status = entry.passed() ? "PASS" : "FAIL";
         String statusClass = entry.passed() ? "pass" : "fail";
         String designed = entry.designedFailure() ? "<div class=\"note\">Designed failure</div>" : "";
+        String evidence = screenshotLinks(entry.screenshotDirectory());
         return "<tr><td>" + html(entry.scenarioName()) + "</td><td>" + html(entry.actual())
+            + "<div class=\"evidence\">" + evidence + "</div>"
             + "</td><td>" + html(entry.expected()) + "</td><td class=\"" + statusClass + "\">"
-            + status + designed + "</td><td>" + screenshotLinks(entry.screenshotDirectory()) + "</td></tr>";
+            + status + designed + "</td></tr>";
     }
 
     private String screenshotLinks(Path directory) throws IOException {
@@ -73,7 +75,7 @@ public final class AssignmentReportListener implements ISuiteListener {
     }
 
     private static String styles() {
-        return "body{font:15px system-ui;background:#f4f7fb;color:#172033;margin:0}main{max-width:1400px;margin:40px auto;padding:0 24px}h1{margin-bottom:8px}.summary{font-weight:700}table{width:100%;border-collapse:collapse;background:white;box-shadow:0 6px 24px #18315318}th{background:#243b53;color:white;text-align:left}th,td{padding:14px;border-bottom:1px solid #d9e2ec;vertical-align:top}td:nth-child(1){font-weight:700;min-width:180px}td:nth-child(2),td:nth-child(3){max-width:340px;word-break:break-word}.pass{color:#16794b;font-weight:800}.fail{color:#b42318;font-weight:800}.note{font-size:12px;font-weight:500;margin-top:4px}a{display:inline-block;margin:2px;color:#1f5d99;font-size:12px}";
+        return "body{font:15px system-ui;background:#f4f7fb;color:#172033;margin:0}main{max-width:1400px;margin:40px auto;padding:0 24px}h1{margin-bottom:8px}.summary{font-weight:700}table{width:100%;border-collapse:collapse;background:white;box-shadow:0 6px 24px #18315318}th{background:#243b53;color:white;text-align:left}th,td{padding:14px;border-bottom:1px solid #d9e2ec;vertical-align:top}td:nth-child(1){font-weight:700;min-width:180px}td:nth-child(2),td:nth-child(3){max-width:420px;word-break:break-word}.pass{color:#16794b;font-weight:800}.fail{color:#b42318;font-weight:800}.note{font-size:12px;font-weight:500;margin-top:4px}.evidence{margin-top:8px}a{display:inline-block;margin:2px;color:#1f5d99;font-size:12px}";
     }
 
     private static String html(String value) {

@@ -22,8 +22,7 @@ public final class WorkbookData {
         "Scenarios", List.of("scenario_id", "execution_order", "scenario_name", "intended_outcome", "description"),
         "Steps", List.of("scenario_id", "step_order", "action", "locator_key", "input_key", "expected_key", "timeout_seconds"),
         "Data", List.of("key", "value", "purpose"),
-        "Locators", List.of("key", "strategy", "selector", "purpose"),
-        "DemoData", List.of("dataset_id", "title", "description", "download_filename", "download_allowed")
+        "Locators", List.of("key", "strategy", "selector", "purpose")
     );
     private final Map<String, List<Map<String, String>>> sheets;
 
@@ -115,7 +114,6 @@ public final class WorkbookData {
         Set<String> scenarios = uniqueKeys("Scenarios", "scenario_id");
         Set<String> data = uniqueKeys("Data", "key");
         Set<String> locators = uniqueKeys("Locators", "key");
-        uniqueKeys("DemoData", "dataset_id");
         Set<Integer> orders = new HashSet<>();
         for (var row : rows("Scenarios")) {
             required(row, "scenario_name");
@@ -126,11 +124,6 @@ public final class WorkbookData {
         for (var row : rows("Locators")) {
             required(row, "selector");
             require(Set.of("css", "id", "xpath", "name").contains(row.get("strategy")), "Invalid locator strategy");
-        }
-        for (var row : rows("DemoData")) {
-            for (String column : List.of("title", "description", "download_filename")) required(row, column);
-            require(Set.of("TRUE", "FALSE").contains(row.get("download_allowed").toUpperCase(Locale.ROOT)),
-                "download_allowed must be an Excel boolean or TRUE/FALSE");
         }
         var steps = new HashSet<String>();
         var covered = new HashSet<String>();
@@ -146,10 +139,17 @@ public final class WorkbookData {
             switch (row.get("action")) {
                 case "OPEN" -> required(row, "input_key");
                 case "TYPE" -> { required(row, "locator_key"); required(row, "input_key"); }
-                case "CLICK" -> required(row, "locator_key");
+                case "CLICK", "CONTEXT_CLICK", "SCROLL_INTO_VIEW", "SWITCH_TO_IFRAME",
+                     "ASSERT_VISIBLE", "VERIFY_VISIBLE" -> required(row, "locator_key");
+                case "SELECT_TEXT", "SET_CHECKBOX" -> {
+                    required(row, "locator_key"); required(row, "input_key");
+                }
                 case "ASSERT_TEXT", "VERIFY_TEXT", "ASSERT_DOWNLOAD" -> {
                     required(row, "locator_key"); required(row, "expected_key");
                 }
+                case "ASSERT_URL_CONTAINS" -> required(row, "expected_key");
+                case "PRINT_TO_PDF" -> required(row, "input_key");
+                case "WAIT_FOR_ENTER", "SWITCH_TO_NEW_WINDOW", "SWITCH_TO_DEFAULT_CONTENT" -> { }
                 default -> throw new IllegalArgumentException("Unsupported action: " + row.get("action"));
             }
         }

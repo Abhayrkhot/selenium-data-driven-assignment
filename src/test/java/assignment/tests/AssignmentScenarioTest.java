@@ -4,7 +4,6 @@ import assignment.browser.BrowserSession;
 import assignment.browser.RunPaths;
 import assignment.data.StepDefinition;
 import assignment.data.WorkbookData;
-import assignment.demo.DemoServer;
 import assignment.reporting.ScenarioReportEntry;
 import assignment.reporting.ScenarioReportStore;
 import assignment.steps.ScenarioRunner;
@@ -21,20 +20,25 @@ import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
-/** Executes all five illustrative scenarios without dependencies between them. */
+/** Executes the five assignment scenarios in one authenticated browser session. */
 public class AssignmentScenarioTest {
     private WorkbookData workbook;
-    private DemoServer demo;
+    private BrowserSession browser;
+    private Path downloads;
 
     @BeforeClass
-    public void startDemo() throws Exception {
+    public void startBrowser() throws Exception {
         workbook = WorkbookData.load(Path.of(System.getProperty("workbook")));
-        demo = DemoServer.start(workbook);
+        var paths = new RunPaths(ScenarioReportStore.root());
+        downloads = paths.freshDownloadDirectory("suite", "shared-browser-downloads");
+        boolean headless = Boolean.parseBoolean(System.getProperty("headless", "false"));
+        // One browser preserves SSO after the single permitted Duo interaction.
+        browser = BrowserSession.start(downloads, headless);
     }
 
     @AfterClass(alwaysRun = true)
-    public void stopDemo() {
-        if (demo != null) demo.close();
+    public void stopBrowser() {
+        if (browser != null) browser.close();
     }
 
     @DataProvider(name = "scenarios", parallel = false)
@@ -62,20 +66,17 @@ public class AssignmentScenarioTest {
         try {
             var paths = new RunPaths(ScenarioReportStore.root());
             screenshots = paths.screenshotDirectory(id, name);
-            Path downloads = paths.freshDownloadDirectory(id, name);
-            boolean headless = Boolean.parseBoolean(System.getProperty("headless", "true"));
-            try (var browser = BrowserSession.start(downloads, headless)) {
-                var screenshotManager = new ScreenshotManager(browser.driver(), screenshots);
-                var executor = new StepExecutor(browser.driver(), downloads, screenshotManager, data,
-                    workbook.locators(), Map.of("demoBaseUrl", demo.baseUrl()));
-                List<StepEvidence> evidence = new ScenarioRunner(executor).run(steps);
-                actual = actualSummary(evidence);
-                passed = true;
-            }
+            var screenshotManager = new ScreenshotManager(browser.driver(), screenshots);
+            var executor = new StepExecutor(browser.driver(), downloads, screenshotManager, data,
+                workbook.locators(), data);
+            List<StepEvidence> evidence = new ScenarioRunner(executor).run(steps);
+            actual = actualSummary(evidence);
+            passed = true;
         } catch (Throwable error) {
             failure = error;
             actual = failureSummary(error);
         } finally {
+            // Record the observed result. intended_outcome never converts Scenario 4 into a pass.
             ScenarioReportStore.add(new ScenarioReportEntry(order, name, actual, expected, passed,
                 "FAIL".equals(scenario.get("intended_outcome")), screenshots));
         }

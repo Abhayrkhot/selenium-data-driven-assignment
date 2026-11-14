@@ -9,7 +9,7 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 
-/** Owns one isolated browser and download directory for a single scenario. */
+/** Owns the shared browser used by all five scenarios in presentation order. */
 public final class BrowserSession implements AutoCloseable {
     private final WebDriver driver;
     private final Path downloadDirectory;
@@ -33,7 +33,8 @@ public final class BrowserSession implements AutoCloseable {
         preferences.put("safebrowsing.enabled", true);
         var options = new ChromeOptions();
         options.setExperimentalOption("prefs", preferences);
-        options.addArguments("--window-size=1440,1000", "--disable-search-engine-choice-screen");
+        options.addArguments("--window-size=1440,1000", "--disable-search-engine-choice-screen",
+            "--disable-notifications");
         if (headless) options.addArguments("--headless=new");
         return new BrowserSession(new ChromeDriver(options), downloadDirectory);
     }

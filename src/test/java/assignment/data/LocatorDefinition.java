@@ -4,11 +4,15 @@ import org.openqa.selenium.By;
 
 public record LocatorDefinition(String strategy, String selector) {
     public By toBy() {
+        return toBy(selector);
+    }
+
+    public By toBy(String resolvedSelector) {
         return switch (strategy) {
-            case "css" -> By.cssSelector(selector);
-            case "id" -> By.id(selector);
-            case "xpath" -> By.xpath(selector);
-            case "name" -> By.name(selector);
+            case "css" -> By.cssSelector(resolvedSelector);
+            case "id" -> By.id(resolvedSelector);
+            case "xpath" -> By.xpath(resolvedSelector);
+            case "name" -> By.name(resolvedSelector);
             default -> throw new IllegalArgumentException("Unsupported locator strategy: " + strategy);
         };
     }

@@ -1,8 +1,13 @@
 #!/bin/sh
 set -u
 
-headless_value="${HEADLESS:-true}"
-mvn --batch-mode --no-transfer-progress clean test -Dheadless="${headless_value}"
+workbook_path="${WORKBOOK:-data/scenarios.local.xlsx}"
+if [ ! -f "${workbook_path}" ]; then
+  printf 'Missing private workbook: %s\nCopy data/scenarios.xlsx to data/scenarios.local.xlsx and enter the Excel login/event values.\n' "${workbook_path}" >&2
+  exit 2
+fi
+
+mvn --batch-mode --no-transfer-progress clean test -Dheadless=false -Dworkbook="${workbook_path}"
 maven_status=$?
 
 report_path="target/assignment-report/report.html"

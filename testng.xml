@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
-<suite name="Phase 4 end-to-end assignment" parallel="none" thread-count="1" configfailurepolicy="continue">
+<suite name="Northeastern end-to-end assignment" parallel="none" thread-count="1" configfailurepolicy="continue">
   <listeners>
     <listener class-name="assignment.reporting.AssignmentReportListener"/>
   </listeners>
-  <test name="Workbook, framework, and five scenarios" preserve-order="true">
+  <test name="Workbook and five live scenarios" preserve-order="true">
     <classes>
       <class name="assignment.data.WorkbookValidationTest"/>
-      <class name="assignment.steps.FrameworkSmokeTest"/>
       <class name="assignment.tests.AssignmentScenarioTest"/>
     </classes>
   </test>
