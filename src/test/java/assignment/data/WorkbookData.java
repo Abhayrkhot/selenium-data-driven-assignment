@@ -139,7 +139,8 @@ public final class WorkbookData {
             switch (row.get("action")) {
                 case "OPEN" -> required(row, "input_key");
                 case "TYPE" -> { required(row, "locator_key"); required(row, "input_key"); }
-                case "CLICK", "CONTEXT_CLICK", "SCROLL_INTO_VIEW", "SWITCH_TO_IFRAME",
+                case "CLICK", "CLICK_AND_SWITCH", "CLICK_AND_SWITCH_IF_OPENED", "CONTEXT_CLICK",
+                     "SCROLL_INTO_VIEW", "SWITCH_TO_IFRAME",
                      "ASSERT_VISIBLE", "VERIFY_VISIBLE" -> required(row, "locator_key");
                 case "SELECT_TEXT", "SET_CHECKBOX" -> {
                     required(row, "locator_key"); required(row, "input_key");

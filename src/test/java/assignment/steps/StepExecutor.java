@@ -91,6 +91,8 @@ public final class StepExecutor {
                 clickable(step).click();
                 yield "Clicked " + step.locatorKey();
             }
+            case "CLICK_AND_SWITCH" -> clickAndSwitch(step);
+            case "CLICK_AND_SWITCH_IF_OPENED" -> clickAndSwitchIfOpened(step);
             case "SELECT_TEXT" -> {
                 String option = resolve(value(step.inputKey()));
                 new Select(visible(step)).selectByVisibleText(option);
@@ -165,6 +167,29 @@ public final class StepExecutor {
                 driver.switchTo().window(handle);
                 return "Switched from " + original + " to new window";
             }).orElseThrow(() -> new IllegalStateException("No new browser window appeared"));
+    }
+
+    private String clickAndSwitch(StepDefinition step) {
+        Set<String> before = driver.getWindowHandles();
+        clickable(step).click();
+        String newHandle = wait(step).until(ignored -> driver.getWindowHandles().stream()
+            .filter(handle -> !before.contains(handle)).findFirst().orElse(null));
+        driver.switchTo().window(newHandle);
+        return "Clicked " + step.locatorKey() + " and switched to its new window";
+    }
+
+    private String clickAndSwitchIfOpened(StepDefinition step) {
+        Set<String> before = driver.getWindowHandles();
+        clickable(step).click();
+        try {
+            String newHandle = new WebDriverWait(driver, Duration.ofSeconds(5)).until(ignored ->
+                driver.getWindowHandles().stream().filter(handle -> !before.contains(handle))
+                    .findFirst().orElse(null));
+            driver.switchTo().window(newHandle);
+            return "Clicked " + step.locatorKey() + " and switched to its new window";
+        } catch (RuntimeException noNewWindow) {
+            return "Clicked " + step.locatorKey() + " in the current window";
+        }
     }
 
     private String waitForAuthentication(StepDefinition step) {
