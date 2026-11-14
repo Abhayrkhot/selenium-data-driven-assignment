@@ -2,7 +2,7 @@
 
 A Java Maven scaffold for a five-scenario Selenium assignment. Uses Selenium WebDriver, TestNG, and Apache POI. Test data is stored in Excel.
 
-**Current status: phase 4.** The Maven build, Excel workbook, reusable browser framework, illustrative local demo, five-scenario execution, and custom HTML report are implemented and verified. The actual assignment website and scenario details have not been supplied, so these remain illustrative tests rather than completed target-site automation.
+**Current status: phase 5.** The reusable Java assignment scaffold, illustrative local demo, five-scenario execution, custom report, repeatable verifier, presentation guide, and submission package are complete. The actual assignment website and scenario details have not been supplied, so these remain illustrative tests rather than completed target-site automation.
 
 No target website or detailed scenario specifications have been provided. The included workbook contains illustrative local-demo definitions and clearly marked locators to customize.
 
@@ -22,6 +22,18 @@ mvn --batch-mode --no-transfer-progress clean test
 ```
 
 This runs four workbook checks, three Chrome framework smoke checks, and all five illustrative assignment scenarios. Scenario 4 must fail, so Maven is expected to return a nonzero status after scenario 5 finishes. The custom report is written to `target/assignment-report/report.html`; its 36 assignment screenshots are stored beside it in scenario folders. Standard TestNG results remain under `target/surefire-reports/`.
+
+For an automated check of the expected demonstration result:
+
+```sh
+./scripts/verify-demo.sh
+```
+
+For a visible presentation run:
+
+```sh
+HEADLESS=false ./scripts/run-assignment.sh
+```
 
 To validate a separate local workbook:
 
@@ -71,8 +83,12 @@ The action contract is documented in [data/README.md](data/README.md). Java read
 - `PHASE_1.md`: scope and acceptance criteria.
 - `PHASE_3.md`: browser-framework behavior, verification, and phase boundary.
 - `PHASE_4.md`: end-to-end behavior, expected failure, report, and verified results.
+- `PHASE_5.md`: submission packaging, repeatable verification, and completion boundary.
+- `CUSTOMIZE_TARGET.md`: real-site and 2FA customization checklist.
+- `PRESENTATION.md`: ten-minute presentation plan.
+- `scripts/`: presentation runner and post-run demo verifier.
 
-Phase 5 will focus on final submission checks and target-site customization once the real website and scenario definitions are available.
+The scaffold is ready for submission as an illustrative implementation. Target-site customization begins when the real website and detailed scenario requirements are available.
 
 ## Verification
 
