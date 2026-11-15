@@ -142,15 +142,16 @@ public final class WorkbookData {
                 case "CLICK", "CLICK_AND_SWITCH", "CLICK_AND_SWITCH_IF_OPENED", "CONTEXT_CLICK",
                      "SCROLL_INTO_VIEW", "SWITCH_TO_IFRAME",
                      "ASSERT_VISIBLE", "VERIFY_VISIBLE" -> required(row, "locator_key");
-                case "SELECT_TEXT", "SET_CHECKBOX" -> {
+                case "SELECT_TEXT", "CHOOSE_OPTION", "SET_CHECKBOX" -> {
                     required(row, "locator_key"); required(row, "input_key");
                 }
-                case "ASSERT_TEXT", "VERIFY_TEXT", "ASSERT_DOWNLOAD" -> {
+                case "ASSERT_TEXT", "VERIFY_TEXT" -> {
                     required(row, "locator_key"); required(row, "expected_key");
                 }
-                case "ASSERT_URL_CONTAINS" -> required(row, "expected_key");
+                case "ASSERT_URL_CONTAINS", "ASSERT_DOWNLOAD" -> required(row, "expected_key");
                 case "PRINT_TO_PDF" -> required(row, "input_key");
-                case "WAIT_FOR_AUTHENTICATION", "SWITCH_TO_NEW_WINDOW", "SWITCH_TO_DEFAULT_CONTENT" -> { }
+                case "WAIT_FOR_AUTHENTICATION", "WAIT_FOR_LOADING_COMPLETE", "SWITCH_TO_NEW_WINDOW",
+                     "SWITCH_TO_DEFAULT_CONTENT" -> { }
                 default -> throw new IllegalArgumentException("Unsupported action: " + row.get("action"));
             }
         }

@@ -30,6 +30,11 @@ public final class BrowserSession implements AutoCloseable {
         preferences.put("download.default_directory", downloadDirectory.toAbsolutePath().toString());
         preferences.put("download.prompt_for_download", false);
         preferences.put("download.directory_upgrade", true);
+        preferences.put("savefile.default_directory", downloadDirectory.toAbsolutePath().toString());
+        preferences.put("printing.print_preview_sticky_settings.appState", """
+            {"recentDestinations":[{"id":"Save as PDF","origin":"local","account":""}],
+             "selectedDestinationId":"Save as PDF","version":2}
+            """);
         preferences.put("safebrowsing.enabled", true);
         var options = new ChromeOptions();
         options.setExperimentalOption("prefs", preferences);

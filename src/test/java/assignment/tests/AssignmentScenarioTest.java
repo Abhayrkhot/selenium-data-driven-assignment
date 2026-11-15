@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.openqa.selenium.NoSuchWindowException;
+import org.openqa.selenium.WebDriver;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
@@ -80,6 +82,7 @@ public class AssignmentScenarioTest {
         Path screenshots = null;
 
         try {
+            useOpenWindow(browser.driver());
             var paths = new RunPaths(ScenarioReportStore.root());
             screenshots = paths.screenshotDirectory(id, name);
             var screenshotManager = new ScreenshotManager(browser.driver(), screenshots);
@@ -98,6 +101,18 @@ public class AssignmentScenarioTest {
         }
 
         if (failure != null) throw failure;
+    }
+
+    private static void useOpenWindow(WebDriver driver) {
+        // A failed scenario can leave the driver on a tab Chrome has since closed;
+        // the next scenario must still start in a live tab.
+        try {
+            driver.getWindowHandle();
+        } catch (NoSuchWindowException closed) {
+            List<String> open = new ArrayList<>(driver.getWindowHandles());
+            driver.switchTo().window(open.get(open.size() - 1));
+        }
+        driver.switchTo().defaultContent();
     }
 
     private static String expectedSummary(List<StepDefinition> steps, Map<String, String> data) {

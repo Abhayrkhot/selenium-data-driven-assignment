@@ -54,7 +54,7 @@ mvn --batch-mode --no-transfer-progress -Dsurefire.suiteXmlFiles=testng-validati
 
 The Steps worksheet controls navigation and behavior. It supports navigation, typing, clicking, native dropdown selection, scrolling, right-click, iframe and new-window switching, checkbox state changes, print-to-PDF, hard assertions, soft verification, and download assertions. Locator strings can reference Data keys such as `${event1_date_label}`.
 
-Selenium's print API saves the transcript PDF reliably after the required right-click demonstration. It avoids Chrome's operating-system print dialog, which Selenium cannot control portably.
+During a visible run, the transcript scenario opens Chrome's print preview, uses Save as PDF, completes the operating system's save dialog, and then opens the saved PDF in Chrome as visual evidence. Java's cross-platform keyboard automation drives the browser-owned controls on macOS, Windows, and Linux. A persistent copy is written to `Desktop/Selenium/latest-transcript.pdf`; set `-DtranscriptOutputDirectory=/another/path` to override that folder. Headless runs use Selenium's print API because no print dialog can be displayed.
 
 ## Calibrate before presentation
 

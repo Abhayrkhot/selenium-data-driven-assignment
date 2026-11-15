@@ -2,22 +2,35 @@ package assignment.steps;
 
 import assignment.data.LocatorDefinition;
 import assignment.data.StepDefinition;
+import java.awt.AWTException;
+import java.awt.Robot;
+import java.awt.Toolkit;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.NotFoundException;
+import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.PrintsPage;
 import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.WindowType;
 import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.print.PrintOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -35,6 +48,7 @@ public final class StepExecutor {
     private final Map<String, String> data;
     private final Map<String, LocatorDefinition> locators;
     private final Map<String, String> placeholders;
+    private String activeFrameKey;
 
     public StepExecutor(WebDriver driver, Path downloadDirectory, ScreenshotManager screenshots,
                         Map<String, String> data, Map<String, LocatorDefinition> locators,
@@ -77,6 +91,7 @@ public final class StepExecutor {
         return switch (step.action()) {
             case "OPEN" -> {
                 String url = resolve(value(step.inputKey()));
+                activeFrameKey = null;
                 driver.navigate().to(url);
                 yield driver.getCurrentUrl();
             }
@@ -98,6 +113,15 @@ public final class StepExecutor {
                 new Select(visible(step)).selectByVisibleText(option);
                 yield option;
             }
+            case "CHOOSE_OPTION" -> {
+                String option = resolve(value(step.inputKey()));
+                clickable(step).click();
+                // Canvas (InstUI) dropdowns render their options in a separate listbox popup.
+                By choice = By.xpath("//*[@role='option'][normalize-space(.)=" + xpathLiteral(option) + "]");
+                wait(step).until(ignored -> driver.findElements(choice).stream()
+                    .filter(WebElement::isDisplayed).findFirst().orElse(null)).click();
+                yield option;
+            }
             case "SCROLL_INTO_VIEW" -> {
                 WebElement element = visible(step);
                 ((JavascriptExecutor) driver).executeScript(
@@ -106,26 +130,36 @@ public final class StepExecutor {
             }
             case "CONTEXT_CLICK" -> {
                 WebElement element = visible(step);
-                new Actions(driver).contextClick(element).perform();
+                // Keep Chrome's context menu visible briefly so the presentation shows
+                // the required right-click before the PDF is generated.
+                new Actions(driver).contextClick(element).pause(Duration.ofSeconds(2)).perform();
                 yield "Right-clicked " + step.locatorKey();
             }
             case "SET_CHECKBOX" -> {
-                WebElement checkbox = visible(step);
+                WebElement checkbox = present(step);
                 boolean desired = Boolean.parseBoolean(resolve(value(step.inputKey())));
-                if (checkbox.isSelected() != desired) checkbox.click();
-                Assert.assertEquals(checkbox.isSelected(), desired, "Checkbox state mismatch");
-                yield Boolean.toString(checkbox.isSelected());
+                if (checkboxState(checkbox) != desired) {
+                    // Trumba visually replaces its native checkbox, leaving the real input hidden.
+                    if (checkbox.isDisplayed()) checkbox.click();
+                    else ((JavascriptExecutor) driver).executeScript("arguments[0].click();", checkbox);
+                }
+                wait(step).until(ignored -> checkboxState(present(step)) == desired);
+                Assert.assertEquals(checkboxState(present(step)), desired, "Checkbox state mismatch");
+                yield Boolean.toString(desired);
             }
             case "SWITCH_TO_IFRAME" -> {
                 wait(step).until(ExpectedConditions.frameToBeAvailableAndSwitchToIt(by(step.locatorKey())));
+                activeFrameKey = step.locatorKey();
                 yield "Switched to " + step.locatorKey();
             }
             case "SWITCH_TO_DEFAULT_CONTENT" -> {
+                activeFrameKey = null;
                 driver.switchTo().defaultContent();
                 yield "Switched to default content";
             }
             case "SWITCH_TO_NEW_WINDOW" -> switchToNewWindow(step);
             case "WAIT_FOR_AUTHENTICATION" -> waitForAuthentication(step);
+            case "WAIT_FOR_LOADING_COMPLETE" -> waitForLoadingComplete(step);
             case "PRINT_TO_PDF" -> printToPdf(step);
             case "ASSERT_VISIBLE" -> {
                 WebElement element = visible(step);
@@ -164,9 +198,14 @@ public final class StepExecutor {
         wait(step).until(ignored -> driver.getWindowHandles().stream().anyMatch(handle -> !handle.equals(original)));
         return driver.getWindowHandles().stream().filter(handle -> !originalOnly.contains(handle)).findFirst()
             .map(handle -> {
-                driver.switchTo().window(handle);
+                switchToWindow(handle);
                 return "Switched from " + original + " to new window";
             }).orElseThrow(() -> new IllegalStateException("No new browser window appeared"));
+    }
+
+    private void switchToWindow(String handle) {
+        activeFrameKey = null;
+        driver.switchTo().window(handle);
     }
 
     private String clickAndSwitch(StepDefinition step) {
@@ -174,7 +213,7 @@ public final class StepExecutor {
         clickable(step).click();
         String newHandle = wait(step).until(ignored -> driver.getWindowHandles().stream()
             .filter(handle -> !before.contains(handle)).findFirst().orElse(null));
-        driver.switchTo().window(newHandle);
+        switchToWindow(newHandle);
         return "Clicked " + step.locatorKey() + " and switched to its new window";
     }
 
@@ -185,7 +224,7 @@ public final class StepExecutor {
             String newHandle = new WebDriverWait(driver, Duration.ofSeconds(5)).until(ignored ->
                 driver.getWindowHandles().stream().filter(handle -> !before.contains(handle))
                     .findFirst().orElse(null));
-            driver.switchTo().window(newHandle);
+            switchToWindow(newHandle);
             return "Clicked " + step.locatorKey() + " and switched to its new window";
         } catch (RuntimeException noNewWindow) {
             return "Clicked " + step.locatorKey() + " in the current window";
@@ -202,23 +241,140 @@ public final class StepExecutor {
         return "Authenticated at " + driver.getCurrentUrl();
     }
 
+    private String waitForLoadingComplete(StepDefinition step) {
+        // Banner submits the transcript as soon as the second custom dropdown is selected.
+        // Wait until its full-screen loading mask is gone before using the transcript page.
+        wait(step).until(ignored -> {
+            Object ready = ((JavascriptExecutor) driver).executeScript("return document.readyState");
+            boolean loading = driver.findElements(By.cssSelector(
+                    "[role='progressbar'], [aria-busy='true'], [class*='spinner'], [class*='loading']"))
+                .stream().anyMatch(WebElement::isDisplayed);
+            return "complete".equals(ready) && !loading;
+        });
+        return "Page loading completed at " + driver.getCurrentUrl();
+    }
+
     private String printToPdf(StepDefinition step) {
-        // Selenium cannot drive Chrome's operating-system print dialog. Its print endpoint
-        // preserves the assignment's PDF result after the preceding right-click step.
-        if (!(driver instanceof PrintsPage printable)) {
-            throw new WebDriverException("The active browser does not support Selenium print-to-PDF");
-        }
         String filename = resolve(value(step.inputKey()));
         Path output = downloadDirectory.resolve(filename).normalize();
         if (!output.startsWith(downloadDirectory.normalize())) {
             throw new IllegalArgumentException("PDF filename must stay inside the download directory");
         }
         try {
-            Files.write(output, Base64.getDecoder().decode(
-                printable.print(new PrintOptions()).getContent()));
-            return output.toAbsolutePath().toString();
+            if (isVisibleRun()) savePdfThroughChromeUi(output, step.timeoutSeconds());
+            else savePdfThroughSelenium(output);
+
+            Path desktopCopy = copyToDesktop(output);
+
+            // Display the saved result in Chrome. This gives the presenter and the
+            // after-step screenshot visible evidence that the transcript became a PDF.
+            driver.switchTo().newWindow(WindowType.TAB);
+            driver.navigate().to(desktopCopy.toUri().toString());
+            new WebDriverWait(driver, Duration.ofSeconds(step.timeoutSeconds())).until(ignored ->
+                driver.getCurrentUrl().startsWith("file:")
+                    && "complete".equals(((JavascriptExecutor) driver)
+                        .executeScript("return document.readyState")));
+            return "Saved report copy at %s; copied and opened %s"
+                .formatted(output.toAbsolutePath(), desktopCopy);
         } catch (IOException error) {
             throw new IllegalStateException("Could not save printed transcript PDF", error);
+        }
+    }
+
+    private boolean isVisibleRun() {
+        return !Boolean.parseBoolean(System.getProperty("headless", "false"));
+    }
+
+    private void savePdfThroughChromeUi(Path output, int timeoutSeconds) throws IOException {
+        try {
+            Robot keyboard = new Robot();
+            keyboard.setAutoDelay(150);
+
+            // CONTEXT_CLICK provides the required visible right-click. Triggering print
+            // from the page avoids operating-system-specific context-menu mnemonics while
+            // still showing Chrome's browser-owned print preview to the presenter.
+            ((JavascriptExecutor) driver).executeScript(
+                "setTimeout(() => window.print(), 250); return true;");
+            keyboard.delay(5000);
+
+            // BrowserSession presets Save as PDF as the preview destination. Enter opens
+            // the operating system's save dialog, whose filename field is selected by default.
+            press(keyboard, KeyEvent.VK_ENTER);
+            keyboard.delay(2000);
+            chord(keyboard, selectAllModifier(), KeyEvent.VK_A);
+            type(keyboard, output.getFileName().toString());
+            press(keyboard, KeyEvent.VK_ENTER);
+
+            waitForFile(output, timeoutSeconds);
+        } catch (AWTException error) {
+            throw new IllegalStateException(
+                "Could not control Chrome's visible print dialog. Allow Java to send keyboard input on this computer.",
+                error);
+        }
+    }
+
+    private static int selectAllModifier() {
+        int menuShortcut = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        return (menuShortcut & InputEvent.META_DOWN_MASK) != 0
+            ? KeyEvent.VK_META : KeyEvent.VK_CONTROL;
+    }
+
+    private void savePdfThroughSelenium(Path output) throws IOException {
+        if (!(driver instanceof PrintsPage printable)) {
+            throw new WebDriverException("The active browser does not support Selenium print-to-PDF");
+        }
+        Files.write(output, Base64.getDecoder().decode(
+            printable.print(new PrintOptions()).getContent()));
+    }
+
+    private Path copyToDesktop(Path output) throws IOException {
+        String configured = System.getProperty("transcriptOutputDirectory", "").trim();
+        Path desktopDirectory = configured.isEmpty()
+            ? Path.of(System.getProperty("user.home"), "Desktop", "Selenium")
+            : Path.of(configured);
+        Files.createDirectories(desktopDirectory);
+        Path desktopCopy = desktopDirectory.toAbsolutePath().normalize()
+            .resolve(output.getFileName()).normalize();
+        if (!desktopCopy.startsWith(desktopDirectory.toAbsolutePath().normalize())) {
+            throw new IllegalArgumentException("PDF filename must stay inside the Desktop output directory");
+        }
+        Files.copy(output, desktopCopy, StandardCopyOption.REPLACE_EXISTING);
+        return desktopCopy;
+    }
+
+    private void waitForFile(Path output, int timeoutSeconds) throws IOException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(timeoutSeconds).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (Files.isRegularFile(output) && Files.size(output) > 0) return;
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while waiting for the PDF save dialog", error);
+            }
+        }
+        throw new IOException("Chrome did not save the PDF within " + timeoutSeconds + " seconds: " + output);
+    }
+
+    private static void press(Robot keyboard, int key) {
+        keyboard.keyPress(key);
+        keyboard.keyRelease(key);
+    }
+
+    private static void chord(Robot keyboard, int modifier, int key) {
+        keyboard.keyPress(modifier);
+        keyboard.keyPress(key);
+        keyboard.keyRelease(key);
+        keyboard.keyRelease(modifier);
+    }
+
+    private static void type(Robot keyboard, String text) {
+        for (char character : text.toCharArray()) {
+            int key = KeyEvent.getExtendedKeyCodeForChar(character);
+            if (key == KeyEvent.VK_UNDEFINED) {
+                throw new IllegalArgumentException("Unsupported PDF filename character: " + character);
+            }
+            press(keyboard, key);
         }
     }
 
@@ -227,21 +383,61 @@ public final class StepExecutor {
         if (!expectedFile.startsWith(downloadDirectory.normalize())) {
             throw new IllegalArgumentException("Download filename must not leave its scenario directory");
         }
+        FileTime started = FileTime.from(Instant.now());
         var wait = new WebDriverWait(driver, Duration.ofSeconds(step.timeoutSeconds()));
         try {
-            wait.until(ignored -> completeNonEmptyFile(expectedFile));
-        } catch (RuntimeException timeout) {
-            String status = observedStatus(step);
-            Assert.fail("Expected downloaded file '%s'; observed status: %s".formatted(expectedFilename, status), timeout);
+            // Stop once the expected file arrives or every download started meanwhile has
+            // finished, so a wrong filename fails as soon as the real file is on disk.
+            wait.until(ignored -> completeNonEmptyFile(expectedFile) || downloadsSettledSince(started));
+        } catch (RuntimeException stillDownloading) {
+            // Fall through: the listing below shows any partial download.
+        }
+        if (!completeNonEmptyFile(expectedFile)) {
+            Assert.fail("Expected downloaded file '%s'; downloads folder has: %s"
+                .formatted(expectedFilename, downloadedFiles()));
         }
         return expectedFile.toAbsolutePath().toString();
     }
 
-    private String observedStatus(StepDefinition step) {
+    private boolean downloadsSettledSince(FileTime started) {
+        try (Stream<Path> files = Files.list(downloadDirectory)) {
+            List<Path> all = files.toList();
+            boolean partial = all.stream().anyMatch(path -> PARTIAL_DOWNLOAD_SUFFIXES.stream()
+                .anyMatch(suffix -> path.getFileName().toString().endsWith(suffix)));
+            return !partial && all.stream().anyMatch(path -> modifiedTime(path).compareTo(started) > 0);
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
+    private String downloadedFiles() {
+        try (Stream<Path> files = Files.list(downloadDirectory)) {
+            List<String> listing = files
+                .sorted(Comparator.comparing(StepExecutor::modifiedTime).reversed())
+                .map(path -> "%s (%s)".formatted(path.getFileName(), readableSize(path)))
+                .toList();
+            return listing.isEmpty() ? "no files" : String.join(", ", listing);
+        } catch (IOException error) {
+            return "unreadable (" + error.getMessage() + ")";
+        }
+    }
+
+    private static FileTime modifiedTime(Path path) {
         try {
-            return driver.findElement(by(step.locatorKey())).getText();
-        } catch (RuntimeException missingStatus) {
-            return "status element unavailable (" + missingStatus.getClass().getSimpleName() + ")";
+            return Files.getLastModifiedTime(path);
+        } catch (IOException error) {
+            return FileTime.fromMillis(0);
+        }
+    }
+
+    private static String readableSize(Path path) {
+        try {
+            long bytes = Files.size(path);
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return "%.1f KB".formatted(bytes / 1024.0);
+            return "%.1f MB".formatted(bytes / (1024.0 * 1024));
+        } catch (IOException error) {
+            return "size unknown";
         }
     }
 
@@ -258,11 +454,52 @@ public final class StepExecutor {
     }
 
     private WebElement visible(StepDefinition step) {
-        return wait(step).until(ExpectedConditions.visibilityOfElementLocated(by(step.locatorKey())));
+        // React pages often keep hidden copies of controls in the DOM. Select the first
+        // currently displayed match instead of letting Selenium stop at a hidden copy.
+        return firstMatch(step, WebElement::isDisplayed);
+    }
+
+    private WebElement present(StepDefinition step) {
+        return firstMatch(step, element -> true);
+    }
+
+    private WebElement firstMatch(StepDefinition step, Predicate<WebElement> usable) {
+        return wait(step).until(ignored -> {
+            try {
+                var match = driver.findElements(by(step.locatorKey())).stream().filter(usable).findFirst();
+                if (match.isPresent()) return match.get();
+            } catch (NotFoundException | StaleElementReferenceException detached) {
+                if (activeFrameKey == null) throw detached;
+            }
+            reenterActiveFrame();
+            return null;
+        });
+    }
+
+    private void reenterActiveFrame() {
+        // Trumba replaces its iframe elements when a filter changes, which strands the
+        // driver in a detached frame; follow the replacement by locating the frame again.
+        if (activeFrameKey == null) return;
+        driver.switchTo().defaultContent();
+        driver.switchTo().frame(driver.findElement(by(activeFrameKey)));
+    }
+
+    private boolean checkboxState(WebElement element) {
+        String checked = element.getAttribute("aria-checked");
+        if (checked != null) return "true".equals(checked);
+        return element.isSelected();
     }
 
     private WebElement clickable(StepDefinition step) {
-        return wait(step).until(ExpectedConditions.elementToBeClickable(by(step.locatorKey())));
+        // A locator may intentionally cover desktop/mobile variants. Only return a control
+        // that a user could click in the active layout.
+        return firstMatch(step, element -> element.isDisplayed() && element.isEnabled());
+    }
+
+    private static String xpathLiteral(String text) {
+        if (!text.contains("'")) return "'" + text + "'";
+        if (!text.contains("\"")) return "\"" + text + "\"";
+        return "concat('" + text.replace("'", "',\"'\",'") + "')";
     }
 
     private WebDriverWait wait(StepDefinition step) {
