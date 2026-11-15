@@ -110,6 +110,7 @@ public class AssignmentScenarioTest {
             driver.getWindowHandle();
         } catch (NoSuchWindowException closed) {
             List<String> open = new ArrayList<>(driver.getWindowHandles());
+            if (open.isEmpty()) throw new IllegalStateException("All browser windows were closed before this scenario started", closed);
             driver.switchTo().window(open.get(open.size() - 1));
         }
         driver.switchTo().defaultContent();

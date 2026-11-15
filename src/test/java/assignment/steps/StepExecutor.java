@@ -15,6 +15,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
@@ -42,6 +43,7 @@ import org.testng.asserts.SoftAssert;
 /** Executes workbook-defined steps and always attempts before/after screenshots. */
 public final class StepExecutor {
     private static final List<String> PARTIAL_DOWNLOAD_SUFFIXES = List.of(".crdownload", ".part", ".tmp");
+    private static final String SIGN_IN_PROMPTS = "post_duo_prompts";
     private final WebDriver driver;
     private final Path downloadDirectory;
     private final ScreenshotManager screenshots;
@@ -49,6 +51,7 @@ public final class StepExecutor {
     private final Map<String, LocatorDefinition> locators;
     private final Map<String, String> placeholders;
     private String activeFrameKey;
+    private final List<String> answeredPrompts = new ArrayList<>();
 
     public StepExecutor(WebDriver driver, Path downloadDirectory, ScreenshotManager screenshots,
                         Map<String, String> data, Map<String, LocatorDefinition> locators,
@@ -234,11 +237,33 @@ public final class StepExecutor {
     private String waitForAuthentication(StepDefinition step) {
         String authenticatedUrl = resolve(value("student_hub_url"));
         String expectedHost = URI.create(authenticatedUrl).getHost();
-        // Duo remains the only manual interaction. The redirect is a more reliable signal than
-        // forwarding terminal input through Maven and works during a live presentation.
-        wait(step).until(ignored -> expectedHost.equalsIgnoreCase(
-            URI.create(driver.getCurrentUrl()).getHost()));
-        return "Authenticated at " + driver.getCurrentUrl();
+        // Duo approval on the phone remains the only manual interaction. The redirect is a more
+        // reliable signal than forwarding terminal input through Maven during a live presentation.
+        wait(step).until(ignored -> {
+            if (expectedHost.equalsIgnoreCase(URI.create(driver.getCurrentUrl()).getHost())) return true;
+            answerSignInPrompt();
+            return false;
+        });
+        return "Authenticated at " + driver.getCurrentUrl()
+            + (answeredPrompts.isEmpty() ? "" : "; answered prompts: " + String.join(", ", answeredPrompts));
+    }
+
+    private void answerSignInPrompt() {
+        // Duo's "trust this browser" and Microsoft's "stay signed in" can appear after any SSO
+        // redirect (login, Banner, Canvas). They come and go as redirects run, so a lookup or
+        // click may race a navigation; the caller's next poll simply looks again.
+        if (activeFrameKey != null || !locators.containsKey(SIGN_IN_PROMPTS)) return;
+        try {
+            for (WebElement prompt : driver.findElements(by(SIGN_IN_PROMPTS))) {
+                if (!prompt.isDisplayed() || !prompt.isEnabled()) continue;
+                String label = prompt.getText().isBlank() ? prompt.getAttribute("value") : prompt.getText();
+                prompt.click();
+                answeredPrompts.add("'" + label.trim() + "'");
+                return;
+            }
+        } catch (WebDriverException transientDuringRedirect) {
+            // The page changed under us.
+        }
     }
 
     private String waitForLoadingComplete(StepDefinition step) {
@@ -471,6 +496,7 @@ public final class StepExecutor {
             } catch (NotFoundException | StaleElementReferenceException detached) {
                 if (activeFrameKey == null) throw detached;
             }
+            answerSignInPrompt();
             reenterActiveFrame();
             return null;
         });
