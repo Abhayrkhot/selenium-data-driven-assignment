@@ -167,7 +167,8 @@ public final class StepExecutor {
             case "ASSERT_VISIBLE" -> {
                 WebElement element = visible(step);
                 Assert.assertTrue(element.isDisplayed(), "Element is not visible: " + step.locatorKey());
-                yield element.getText().isBlank() ? "Visible: " + step.locatorKey() : element.getText();
+                String text = shownText(element);
+                yield text.isBlank() ? "Visible: " + step.locatorKey() : text;
             }
             case "VERIFY_VISIBLE" -> {
                 boolean displayed = visible(step).isDisplayed();
@@ -520,6 +521,14 @@ public final class StepExecutor {
         // A locator may intentionally cover desktop/mobile variants. Only return a control
         // that a user could click in the active layout.
         return firstMatch(step, element -> element.isDisplayed() && element.isEnabled());
+    }
+
+    private static String shownText(WebElement element) {
+        // Selenium returns every option's text for a dropdown; a viewer only sees the selected one.
+        String text = "select".equalsIgnoreCase(element.getTagName())
+            ? new Select(element).getFirstSelectedOption().getText()
+            : element.getText();
+        return text.replaceAll("\\s+", " ").trim();
     }
 
     private static String xpathLiteral(String text) {
