@@ -44,6 +44,7 @@ import org.testng.asserts.SoftAssert;
 public final class StepExecutor {
     private static final List<String> PARTIAL_DOWNLOAD_SUFFIXES = List.of(".crdownload", ".part", ".tmp");
     private static final String SIGN_IN_PROMPTS = "post_duo_prompts";
+    private static final String DROPDOWN_OPTION = "dropdown_option";
     private final WebDriver driver;
     private final Path downloadDirectory;
     private final ScreenshotManager screenshots;
@@ -120,7 +121,7 @@ public final class StepExecutor {
                 String option = resolve(value(step.inputKey()));
                 clickable(step).click();
                 // Canvas (InstUI) dropdowns render their options in a separate listbox popup.
-                By choice = By.xpath("//*[@role='option'][normalize-space(.)=" + xpathLiteral(option) + "]");
+                By choice = optionLocator(option);
                 wait(step).until(ignored -> driver.findElements(choice).stream()
                     .filter(WebElement::isDisplayed).findFirst().orElse(null)).click();
                 yield option;
@@ -268,12 +269,11 @@ public final class StepExecutor {
     }
 
     private String waitForLoadingComplete(StepDefinition step) {
-        // Banner submits the transcript as soon as the second custom dropdown is selected.
-        // Wait until its full-screen loading mask is gone before using the transcript page.
+        // Pages such as Banner and LibCal keep working after the click that triggered them.
+        // Wait until none of the workbook's loading indicators is still displayed.
         wait(step).until(ignored -> {
             Object ready = ((JavascriptExecutor) driver).executeScript("return document.readyState");
-            boolean loading = driver.findElements(By.cssSelector(
-                    "[role='progressbar'], [aria-busy='true'], [class*='spinner'], [class*='loading']"))
+            boolean loading = driver.findElements(by(step.locatorKey()))
                 .stream().anyMatch(WebElement::isDisplayed);
             return "complete".equals(ready) && !loading;
         });
@@ -529,6 +529,13 @@ public final class StepExecutor {
             ? new Select(element).getFirstSelectedOption().getText()
             : element.getText();
         return text.replaceAll("\\s+", " ").trim();
+    }
+
+    private By optionLocator(String option) {
+        // The workbook's dropdown_option selector marks where the option text goes with ${option}.
+        LocatorDefinition template = locators.get(DROPDOWN_OPTION);
+        if (template == null) throw new IllegalArgumentException("Missing locator: " + DROPDOWN_OPTION);
+        return template.toBy(resolve(template.selector().replace("${option}", xpathLiteral(option))));
     }
 
     private static String xpathLiteral(String text) {

@@ -150,12 +150,15 @@ public final class WorkbookData {
                 }
                 case "ASSERT_URL_CONTAINS", "ASSERT_DOWNLOAD" -> required(row, "expected_key");
                 case "PRINT_TO_PDF" -> required(row, "input_key");
-                case "WAIT_FOR_AUTHENTICATION", "WAIT_FOR_LOADING_COMPLETE", "SWITCH_TO_NEW_WINDOW",
-                     "SWITCH_TO_DEFAULT_CONTENT" -> { }
+                case "WAIT_FOR_LOADING_COMPLETE" -> required(row, "locator_key");
+                case "WAIT_FOR_AUTHENTICATION", "SWITCH_TO_NEW_WINDOW", "SWITCH_TO_DEFAULT_CONTENT" -> { }
                 default -> throw new IllegalArgumentException("Unsupported action: " + row.get("action"));
             }
         }
         require(covered.equals(scenarios), "Every scenario must have steps");
+        boolean choosesOptions = rows("Steps").stream().anyMatch(row -> "CHOOSE_OPTION".equals(row.get("action")));
+        require(!choosesOptions || locators.contains("dropdown_option"),
+            "CHOOSE_OPTION steps need a dropdown_option locator");
     }
 
     private Set<String> uniqueKeys(String sheet, String column) {
