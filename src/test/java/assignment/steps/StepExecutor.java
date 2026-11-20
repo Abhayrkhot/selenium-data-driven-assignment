@@ -5,6 +5,7 @@ import assignment.data.StepDefinition;
 import java.awt.AWTException;
 import java.awt.Robot;
 import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
@@ -24,6 +25,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.openqa.selenium.By;
+import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NotFoundException;
 import org.openqa.selenium.StaleElementReferenceException;
@@ -107,7 +109,7 @@ public final class StepExecutor {
                 yield element.getAttribute("value");
             }
             case "CLICK" -> {
-                clickable(step).click();
+                safeClick(clickable(step));
                 yield "Clicked " + step.locatorKey();
             }
             case "CLICK_AND_SWITCH" -> clickAndSwitch(step);
@@ -119,7 +121,7 @@ public final class StepExecutor {
             }
             case "CHOOSE_OPTION" -> {
                 String option = resolve(value(step.inputKey()));
-                clickable(step).click();
+                safeClick(clickable(step));
                 // Canvas (InstUI) dropdowns render their options in a separate listbox popup.
                 By choice = optionLocator(option);
                 wait(step).until(ignored -> driver.findElements(choice).stream()
@@ -215,7 +217,7 @@ public final class StepExecutor {
 
     private String clickAndSwitch(StepDefinition step) {
         Set<String> before = driver.getWindowHandles();
-        clickable(step).click();
+        safeClick(clickable(step));
         String newHandle = wait(step).until(ignored -> driver.getWindowHandles().stream()
             .filter(handle -> !before.contains(handle)).findFirst().orElse(null));
         switchToWindow(newHandle);
@@ -224,7 +226,7 @@ public final class StepExecutor {
 
     private String clickAndSwitchIfOpened(StepDefinition step) {
         Set<String> before = driver.getWindowHandles();
-        clickable(step).click();
+        safeClick(clickable(step));
         try {
             String newHandle = new WebDriverWait(driver, Duration.ofSeconds(5)).until(ignored ->
                 driver.getWindowHandles().stream().filter(handle -> !before.contains(handle))
@@ -287,8 +289,22 @@ public final class StepExecutor {
             throw new IllegalArgumentException("PDF filename must stay inside the download directory");
         }
         try {
-            if (isVisibleRun()) savePdfThroughChromeUi(output, step.timeoutSeconds());
-            else savePdfThroughSelenium(output);
+            String method = "Chrome print dialog";
+            if (isVisibleRun()) {
+                try {
+                    savePdfThroughChromeUi(output, step.timeoutSeconds());
+                } catch (IOException | IllegalStateException uiSaveFailed) {
+                    // The visible print preview was shown, but the native Save As dialog did not
+                    // produce the file. Close any open dialogs and save through Selenium instead,
+                    // so the scenario still delivers the transcript PDF without manual help.
+                    closeOpenDialogs();
+                    savePdfThroughSelenium(output);
+                    method = "Selenium print API (fallback after print dialog)";
+                }
+            } else {
+                savePdfThroughSelenium(output);
+                method = "Selenium print API (headless)";
+            }
 
             Path desktopCopy = copyToDesktop(output);
 
@@ -300,8 +316,8 @@ public final class StepExecutor {
                 driver.getCurrentUrl().startsWith("file:")
                     && "complete".equals(((JavascriptExecutor) driver)
                         .executeScript("return document.readyState")));
-            return "Saved report copy at %s; copied and opened %s"
-                .formatted(output.toAbsolutePath(), desktopCopy);
+            return "Saved PDF via %s at %s; copied and opened %s"
+                .formatted(method, output.toAbsolutePath(), desktopCopy);
         } catch (IOException error) {
             throw new IllegalStateException("Could not save printed transcript PDF", error);
         }
@@ -328,7 +344,17 @@ public final class StepExecutor {
             press(keyboard, KeyEvent.VK_ENTER);
             keyboard.delay(2000);
             chord(keyboard, selectAllModifier(), KeyEvent.VK_A);
-            type(keyboard, output.getFileName().toString());
+            if (isWindows()) {
+                // Windows' Save As dialog reopens the last folder it used, so a bare filename can
+                // land anywhere. Pasting the full path saves exactly where the test looks.
+                Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new StringSelection(output.toAbsolutePath().toString()), null);
+                keyboard.delay(300);
+                chord(keyboard, KeyEvent.VK_CONTROL, KeyEvent.VK_V);
+            } else {
+                type(keyboard, output.getFileName().toString());
+            }
+            keyboard.delay(500);
             press(keyboard, KeyEvent.VK_ENTER);
 
             waitForFile(output, timeoutSeconds);
@@ -337,6 +363,22 @@ public final class StepExecutor {
                 "Could not control Chrome's visible print dialog. Allow Java to send keyboard input on this computer.",
                 error);
         }
+    }
+
+    private void closeOpenDialogs() {
+        // Escape closes the operating system's Save As dialog first, then Chrome's print preview.
+        try {
+            Robot keyboard = new Robot();
+            keyboard.setAutoDelay(300);
+            for (int i = 0; i < 3; i++) press(keyboard, KeyEvent.VK_ESCAPE);
+            keyboard.delay(1000);
+        } catch (AWTException ignored) {
+            // Without keyboard control there is nothing to close; the Selenium save still runs.
+        }
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 
     private static int selectAllModifier() {
@@ -476,6 +518,18 @@ public final class StepExecutor {
             }
         } catch (IOException ignored) {
             return false;
+        }
+    }
+
+    private void safeClick(WebElement element) {
+        // Center the element first so sticky headers, footers and banners do not cover it.
+        ((JavascriptExecutor) driver).executeScript(
+            "arguments[0].scrollIntoView({block:'center', inline:'nearest'});", element);
+        try {
+            element.click();
+        } catch (ElementClickInterceptedException covered) {
+            // An overlay (cookie notice, tooltip, footer) still covers the element: click it directly.
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
         }
     }
 
