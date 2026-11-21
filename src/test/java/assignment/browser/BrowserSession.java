@@ -41,6 +41,12 @@ public final class BrowserSession implements AutoCloseable {
         options.addArguments("--window-size=1440,1000", "--disable-search-engine-choice-screen",
             "--disable-notifications");
         if (headless) options.addArguments("--headless=new");
+        // Windows: keystrokes cannot reliably reach Chrome's print dialog (Chrome often cannot take
+        // keyboard focus from the terminal), so print straight to the preset "Save as PDF"
+        // destination. macOS and Linux keep the visible print dialog.
+        if (!headless && System.getProperty("os.name", "").toLowerCase().contains("win")) {
+            options.addArguments("--kiosk-printing");
+        }
         return new BrowserSession(new ChromeDriver(options), downloadDirectory);
     }
 
