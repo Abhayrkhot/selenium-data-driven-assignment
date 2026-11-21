@@ -127,19 +127,28 @@ public class AssignmentScenarioTest {
     private static String actualSummary(List<StepEvidence> evidence) {
         var actual = new ArrayList<String>();
         for (StepEvidence step : evidence) {
-            if (step.action().startsWith("ASSERT_") || step.action().startsWith("VERIFY_")) {
+            // Checks, how the PDF was saved, and any click that needed the JavaScript fallback
+            // all appear in the report's Actual column.
+            if (step.action().startsWith("ASSERT_") || step.action().startsWith("VERIFY_")
+                    || "PRINT_TO_PDF".equals(step.action())) {
                 actual.add(step.actual());
+            } else if (step.actual().contains(StepExecutor.JS_CLICK_NOTE)) {
+                actual.add("Step " + step.order() + ": " + step.actual());
             }
         }
         return actual.isEmpty() ? "All " + evidence.size() + " steps completed" : String.join(" | ", actual);
     }
 
     private static String failureSummary(Throwable failure) {
-        Throwable current = failure;
-        while ((current.getMessage() == null || current.getMessage().isBlank()) && current.getCause() != null) {
-            current = current.getCause();
+        // Show the whole chain ("Step 16 PRINT_TO_PDF failed: Chrome's print dialog did not save ...")
+        // so the report says why a step failed, not just which one.
+        var messages = new ArrayList<String>();
+        for (Throwable current = failure; current != null && messages.size() < 3; current = current.getCause()) {
+            String message = current.getMessage();
+            if (message == null || message.isBlank()) continue;
+            String firstLine = message.lines().findFirst().orElse(message).trim();
+            if (messages.stream().noneMatch(m -> m.contains(firstLine))) messages.add(firstLine);
         }
-        String message = current.getMessage();
-        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
+        return messages.isEmpty() ? failure.getClass().getSimpleName() : String.join(": ", messages);
     }
 }

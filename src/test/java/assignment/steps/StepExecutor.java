@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.openqa.selenium.By;
+import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NotFoundException;
 import org.openqa.selenium.StaleElementReferenceException;
@@ -52,6 +53,9 @@ public final class StepExecutor {
     private final Map<String, LocatorDefinition> locators;
     private final Map<String, String> placeholders;
     private String activeFrameKey;
+    // Set when safeClick had to fall back to a JavaScript click during the current step.
+    private boolean javaScriptClickUsed;
+    public static final String JS_CLICK_NOTE = "(real click was intercepted; clicked with JavaScript instead)";
     private final List<String> answeredPrompts = new ArrayList<>();
 
     public StepExecutor(WebDriver driver, Path downloadDirectory, ScreenshotManager screenshots,
@@ -71,9 +75,11 @@ public final class StepExecutor {
         Throwable failure = null;
         String actual = "";
         String expected = value(step.expectedKey());
+        javaScriptClickUsed = false;
         try {
             before = screenshots.capture(step.order(), step.action(), "before");
             actual = perform(step, expected, softAssert);
+            if (javaScriptClickUsed) actual += " " + JS_CLICK_NOTE;
         } catch (Throwable error) {
             failure = error;
         } finally {
@@ -107,7 +113,7 @@ public final class StepExecutor {
                 yield element.getAttribute("value");
             }
             case "CLICK" -> {
-                clickable(step).click();
+                safeClick(clickable(step));
                 yield "Clicked " + step.locatorKey();
             }
             case "CLICK_AND_SWITCH" -> clickAndSwitch(step);
@@ -119,7 +125,7 @@ public final class StepExecutor {
             }
             case "CHOOSE_OPTION" -> {
                 String option = resolve(value(step.inputKey()));
-                clickable(step).click();
+                safeClick(clickable(step));
                 // Canvas (InstUI) dropdowns render their options in a separate listbox popup.
                 By choice = optionLocator(option);
                 wait(step).until(ignored -> driver.findElements(choice).stream()
@@ -215,7 +221,7 @@ public final class StepExecutor {
 
     private String clickAndSwitch(StepDefinition step) {
         Set<String> before = driver.getWindowHandles();
-        clickable(step).click();
+        safeClick(clickable(step));
         String newHandle = wait(step).until(ignored -> driver.getWindowHandles().stream()
             .filter(handle -> !before.contains(handle)).findFirst().orElse(null));
         switchToWindow(newHandle);
@@ -224,7 +230,7 @@ public final class StepExecutor {
 
     private String clickAndSwitchIfOpened(StepDefinition step) {
         Set<String> before = driver.getWindowHandles();
-        clickable(step).click();
+        safeClick(clickable(step));
         try {
             String newHandle = new WebDriverWait(driver, Duration.ofSeconds(5)).until(ignored ->
                 driver.getWindowHandles().stream().filter(handle -> !before.contains(handle))
@@ -287,8 +293,23 @@ public final class StepExecutor {
             throw new IllegalArgumentException("PDF filename must stay inside the download directory");
         }
         try {
-            if (isVisibleRun()) savePdfThroughChromeUi(output, step.timeoutSeconds());
-            else savePdfThroughSelenium(output);
+            String method;
+            if (isVisibleRun()) {
+                try {
+                    savePdfThroughChromeUi(output, step.timeoutSeconds());
+                    method = isWindows() ? "Chrome print (Save as PDF, kiosk printing on Windows)" : "Chrome print dialog";
+                } catch (IOException | IllegalStateException uiSaveFailed) {
+                    // No silent fallback: if the real print dialog did not save the PDF, the step fails
+                    // and the report says so. Close the dialogs first so the next scenario can still run.
+                    closeOpenDialogs();
+                    throw new IllegalStateException("Chrome's print dialog did not save the PDF: "
+                        + uiSaveFailed.getMessage(), uiSaveFailed);
+                }
+            } else {
+                // Headless runs have no print dialog to drive, so they use Selenium's print API.
+                savePdfThroughSelenium(output);
+                method = "Selenium print API (headless run)";
+            }
 
             Path desktopCopy = copyToDesktop(output);
 
@@ -300,8 +321,8 @@ public final class StepExecutor {
                 driver.getCurrentUrl().startsWith("file:")
                     && "complete".equals(((JavascriptExecutor) driver)
                         .executeScript("return document.readyState")));
-            return "Saved report copy at %s; copied and opened %s"
-                .formatted(output.toAbsolutePath(), desktopCopy);
+            return "Saved PDF via %s at %s; copied and opened %s"
+                .formatted(method, output.toAbsolutePath(), desktopCopy);
         } catch (IOException error) {
             throw new IllegalStateException("Could not save printed transcript PDF", error);
         }
@@ -312,6 +333,14 @@ public final class StepExecutor {
     }
 
     private void savePdfThroughChromeUi(Path output, int timeoutSeconds) throws IOException {
+        if (isWindows()) {
+            // On Windows, Chrome started by the test often cannot take keyboard focus from the
+            // terminal, so keystrokes meant for the print dialog land in another window.
+            // BrowserSession starts Chrome with kiosk printing instead: window.print() saves
+            // straight to the preset "Save as PDF" destination with Chrome's own print engine.
+            savePdfWithKioskPrinting(output, timeoutSeconds);
+            return;
+        }
         try {
             Robot keyboard = new Robot();
             keyboard.setAutoDelay(150);
@@ -329,6 +358,7 @@ public final class StepExecutor {
             keyboard.delay(2000);
             chord(keyboard, selectAllModifier(), KeyEvent.VK_A);
             type(keyboard, output.getFileName().toString());
+            keyboard.delay(500);
             press(keyboard, KeyEvent.VK_ENTER);
 
             waitForFile(output, timeoutSeconds);
@@ -337,6 +367,24 @@ public final class StepExecutor {
                 "Could not control Chrome's visible print dialog. Allow Java to send keyboard input on this computer.",
                 error);
         }
+    }
+
+    private void closeOpenDialogs() {
+        // Only used when the save already failed. Escape closes the Save As dialog, then Chrome's
+        // print preview. Like the save keystrokes, Robot types into the window in front, which during
+        // this step is Chrome's own print dialog.
+        try {
+            Robot keyboard = new Robot();
+            keyboard.setAutoDelay(300);
+            for (int i = 0; i < 2; i++) press(keyboard, KeyEvent.VK_ESCAPE);
+            keyboard.delay(1000);
+        } catch (AWTException ignored) {
+            // Without keyboard control there is nothing to close; the step still fails with its reason.
+        }
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 
     private static int selectAllModifier() {
@@ -366,6 +414,44 @@ public final class StepExecutor {
         }
         Files.copy(output, desktopCopy, StandardCopyOption.REPLACE_EXISTING);
         return desktopCopy;
+    }
+
+    private void savePdfWithKioskPrinting(Path output, int timeoutSeconds) throws IOException {
+        Path folder = output.getParent();
+        Set<Path> existing = pdfsIn(folder);
+        ((JavascriptExecutor) driver).executeScript("setTimeout(() => window.print(), 250); return true;");
+        long deadline = System.nanoTime() + Duration.ofSeconds(timeoutSeconds).toNanos();
+        while (System.nanoTime() < deadline) {
+            for (Path pdf : pdfsIn(folder)) {
+                if (existing.contains(pdf)) continue;
+                long size = Files.size(pdf);
+                pause(750);
+                // Chrome names the file after the page title; rename it once it has finished writing.
+                if (size > 0 && Files.exists(pdf) && Files.size(pdf) == size) {
+                    if (!pdf.equals(output)) Files.move(pdf, output, StandardCopyOption.REPLACE_EXISTING);
+                    return;
+                }
+            }
+            pause(250);
+        }
+        throw new IOException("Chrome's kiosk printing did not save a PDF in " + folder
+            + " within " + timeoutSeconds + " seconds");
+    }
+
+    private static Set<Path> pdfsIn(Path folder) throws IOException {
+        try (Stream<Path> files = Files.list(folder)) {
+            return files.filter(file -> file.getFileName().toString().toLowerCase().endsWith(".pdf"))
+                .collect(java.util.stream.Collectors.toSet());
+        }
+    }
+
+    private static void pause(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the PDF", error);
+        }
     }
 
     private void waitForFile(Path output, int timeoutSeconds) throws IOException {
@@ -476,6 +562,23 @@ public final class StepExecutor {
             }
         } catch (IOException ignored) {
             return false;
+        }
+    }
+
+    private void safeClick(WebElement element) {
+        // Center the element first so sticky headers, footers and banners do not cover it.
+        // 'instant' matters: sites with CSS smooth scrolling would otherwise still be moving
+        // when the real click fires.
+        ((JavascriptExecutor) driver).executeScript(
+            "arguments[0].scrollIntoView({block:'center', inline:'nearest', behavior:'instant'});", element);
+        try {
+            element.click();
+        } catch (ElementClickInterceptedException covered) {
+            // An overlay still covers the element: click it with JavaScript. This skips mouse
+            // events, so it is recorded and shown in the report rather than hidden.
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
+            javaScriptClickUsed = true;
+            System.out.println("JavaScript click fallback used: real click was intercepted (" + covered.getMessage().lines().findFirst().orElse("") + ")");
         }
     }
 

@@ -31,7 +31,7 @@ public final class AssignmentReportListener implements ISuiteListener {
                 <h1>Selenium assignment report</h1>
                 <p class="summary">Executed %d scenarios: %d passed and %d failed.</p>
                 <p>Scenario 4 is designed to fail. Its failure remains a failure. Scenario 5 demonstrates continuation.</p>
-                <table><thead><tr><th>Scenario Name</th><th>Actual</th><th>Expected</th><th>Pass-Fail</th></tr></thead>
+                <table><thead><tr><th>Test scenario name</th><th>Actual</th><th>Expected</th><th>Pass/Fail</th></tr></thead>
                 <tbody>%s</tbody></table>
                 </main></body></html>
                 """.formatted(styles(), entries.size(), passed, entries.size() - passed, rows);

@@ -8,7 +8,7 @@ Java 17, Maven, Selenium, TestNG, and Apache POI implementation of the five Fall
 4. Download a DRS dataset (the full zip), then fail the Excel-defined filename assertion.
 5. Uncheck an Academic Calendar filter and verify **Add to My Calendar** is visible.
 
-Scenario 4 is fourth, remains `FAIL`, and does not prevent Scenario 5 from running. The scenarios share one Chrome session, so Duo approval on the phone happens once and is the only manual action. Every attempted step captures before and after screenshots, including failures. The HTML report has exactly the required columns: Scenario Name, Actual, Expected, and Pass-Fail. Screenshot links appear inside Actual.
+Scenario 4 is fourth, remains `FAIL`, and does not prevent Scenario 5 from running. The scenarios share one Chrome session, so Duo approval on the phone happens once and is the only manual action. Every attempted step captures before and after screenshots, including failures. The HTML report has exactly the required columns: Test scenario name, Actual, Expected, and Pass/Fail. Screenshot links appear inside Actual, which also shows how the transcript PDF was saved and any click that needed the JavaScript fallback.
 
 ## Live-site boundary
 
