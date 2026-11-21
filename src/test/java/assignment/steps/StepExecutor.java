@@ -5,7 +5,6 @@ import assignment.data.StepDefinition;
 import java.awt.AWTException;
 import java.awt.Robot;
 import java.awt.Toolkit;
-import java.awt.datatransfer.StringSelection;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
@@ -358,16 +357,7 @@ public final class StepExecutor {
             press(keyboard, KeyEvent.VK_ENTER);
             keyboard.delay(2000);
             chord(keyboard, selectAllModifier(), KeyEvent.VK_A);
-            if (isWindows()) {
-                // Windows' Save As dialog reopens the last folder it used, so a bare filename can
-                // land anywhere. Pasting the full path saves exactly where the test looks.
-                Toolkit.getDefaultToolkit().getSystemClipboard()
-                    .setContents(new StringSelection(output.toAbsolutePath().toString()), null);
-                keyboard.delay(300);
-                chord(keyboard, KeyEvent.VK_CONTROL, KeyEvent.VK_V);
-            } else {
-                type(keyboard, output.getFileName().toString());
-            }
+            type(keyboard, output.getFileName().toString());
             keyboard.delay(500);
             press(keyboard, KeyEvent.VK_ENTER);
 
@@ -389,7 +379,7 @@ public final class StepExecutor {
             for (int i = 0; i < 2; i++) press(keyboard, KeyEvent.VK_ESCAPE);
             keyboard.delay(1000);
         } catch (AWTException ignored) {
-            // Without keyboard control there is nothing to close; the Selenium save still runs.
+            // Without keyboard control there is nothing to close; the step still fails with its reason.
         }
     }
 
